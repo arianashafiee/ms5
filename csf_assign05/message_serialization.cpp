@@ -9,14 +9,14 @@
 void MessageSerialization::encode(const Message &msg, std::string &encoded_msg) {
   std::ostringstream oss;
 
-  // Start with the message type as a string
-  oss << msg.get_message_type();
+  // Convert MessageType to int explicitly before streaming
+  oss << static_cast<int>(msg.get_message_type());
 
   // Append arguments
   for (unsigned i = 0; i < msg.get_num_args(); ++i) {
     const std::string &arg = msg.get_arg(i);
 
-    // Handle quoting for arguments containing spaces or special characters
+    // Quote arguments containing spaces or quotes
     if (arg.find(' ') != std::string::npos || arg.find('"') != std::string::npos) {
       oss << " \"" << arg << "\"";
     } else {
@@ -24,15 +24,16 @@ void MessageSerialization::encode(const Message &msg, std::string &encoded_msg) 
     }
   }
 
-  // Add a newline
+  // Add a newline to terminate the message
   oss << "\n";
   encoded_msg = oss.str();
 
-  // Check length constraint
+  // Validate length constraint
   if (encoded_msg.size() > Message::MAX_ENCODED_LEN) {
     throw InvalidMessage("Encoded message exceeds maximum length");
   }
 }
+
 void MessageSerialization::decode(const std::string &encoded_msg_, Message &msg) {
   if (encoded_msg_.empty() || encoded_msg_.back() != '\n') {
     throw InvalidMessage("Encoded message must end with a newline");
