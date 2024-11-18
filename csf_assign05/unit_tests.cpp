@@ -6,6 +6,9 @@
 #include "value_stack.h"
 #include "exceptions.h"
 #include "tctest.h"
+#include <iostream>
+#include <string>
+#include <cassert>
 
 struct TestObjs
 {

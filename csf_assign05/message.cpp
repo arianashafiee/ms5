@@ -115,13 +115,16 @@ bool Message::is_valid() const {
   }
 }
 
+
+// Validates if a string is an identifier
 bool is_identifier(const std::string &str) {
-  if (str.empty() || !std::isalpha(str[0])) return false;
-  return std::all_of(str.begin(), str.end(), [](char c) {
-    return std::isalnum(c) || c == '_';
-  });
+    // An identifier starts with a letter and is followed by letters, digits, or underscores
+    static const std::regex identifier_regex("^[a-zA-Z][a-zA-Z0-9_]*$");
+    return std::regex_match(str, identifier_regex);
 }
 
+// Validates if a string is a value
 bool is_value(const std::string &str) {
-  return !str.empty() && str.find(' ') == std::string::npos;
+    // A value must be non-empty and contain no whitespace
+    return !str.empty() && str.find_first_of(" \t\n") == std::string::npos;
 }
