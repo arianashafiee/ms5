@@ -95,21 +95,21 @@ void Message::push_arg( const std::string &arg )
 }
 
 bool Message::is_valid() const {
-  if (m_message_type == MessageType::NONE) return false;
-
   switch (m_message_type) {
     case MessageType::LOGIN:
       return m_args.size() == 1;
     case MessageType::CREATE:
-      return m_args.size() == 1;
     case MessageType::PUSH:
+    case MessageType::DATA:
+    case MessageType::FAILED:
+    case MessageType::ERROR:
       return m_args.size() == 1;
     case MessageType::SET:
     case MessageType::GET:
       return m_args.size() == 2;
     case MessageType::ADD:
-    case MessageType::SUB:
     case MessageType::MUL:
+    case MessageType::SUB:
     case MessageType::DIV:
     case MessageType::POP:
     case MessageType::TOP:
@@ -117,11 +117,6 @@ bool Message::is_valid() const {
     case MessageType::COMMIT:
     case MessageType::BYE:
       return m_args.empty();
-    case MessageType::OK:
-    case MessageType::FAILED:
-    case MessageType::ERROR:
-    case MessageType::DATA:
-      return !m_args.empty();
     default:
       return false;
   }

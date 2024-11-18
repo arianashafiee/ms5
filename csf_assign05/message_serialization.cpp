@@ -7,29 +7,31 @@
 
 void MessageSerialization::encode(const Message &msg, std::string &encoded_msg) {
   std::ostringstream oss;
-  oss << std::to_string(static_cast<int>(msg.get_message_type()));
 
+  // Start with the message type as a string
+  oss << msg.get_message_type();
+
+  // Append arguments
   for (unsigned i = 0; i < msg.get_num_args(); ++i) {
     const std::string &arg = msg.get_arg(i);
 
+    // Handle quoting for arguments containing spaces or special characters
     if (arg.find(' ') != std::string::npos || arg.find('"') != std::string::npos) {
-      oss << " \"" << arg << "\""; // Quote the argument if it contains spaces or quotes
+      oss << " \"" << arg << "\"";
     } else {
-      oss << " " << arg; // Append directly
+      oss << " " << arg;
     }
   }
 
-  oss << "\n"; // Add a newline to terminate the message
+  // Add a newline
+  oss << "\n";
   encoded_msg = oss.str();
 
-  // Validate length
+  // Check length constraint
   if (encoded_msg.size() > Message::MAX_ENCODED_LEN) {
     throw InvalidMessage("Encoded message exceeds maximum length");
   }
 }
-
-
-
 void MessageSerialization::decode(const std::string &encoded_msg_, Message &msg) {
   if (encoded_msg_.empty() || encoded_msg_.back() != '\n') {
     throw InvalidMessage("Encoded message must end with a newline");
@@ -49,7 +51,7 @@ void MessageSerialization::decode(const std::string &encoded_msg_, Message &msg)
   int message_type;
   try {
     message_type = std::stoi(token);
-  } catch (const std::invalid_argument &) {
+  } catch (...) {
     throw InvalidMessage("Invalid message type");
   }
 
@@ -77,7 +79,7 @@ void MessageSerialization::decode(const std::string &encoded_msg_, Message &msg)
       quoted_arg.pop_back(); // Remove trailing quote
       args.push_back(quoted_arg);
     } else {
-      args.push_back(token); // Add directly if not quoted
+      args.push_back(token);
     }
   }
 
