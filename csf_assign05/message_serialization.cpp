@@ -1,6 +1,7 @@
 #include <utility>
 #include <sstream>
 #include <cassert>
+#include <ostream>
 #include <map>
 #include "exceptions.h"
 #include "message_serialization.h"
