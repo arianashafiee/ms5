@@ -5,8 +5,8 @@
 
 Table::Table(const std::string &name)
     : m_name(name)
-    , m_tentative_data()
     , m_final_data()
+    , m_tentative_data()
 {
     pthread_mutex_init(&m_mutex, nullptr); // Initialize the mutex
 }
