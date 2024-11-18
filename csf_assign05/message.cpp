@@ -95,37 +95,45 @@ void Message::push_arg( const std::string &arg )
   m_args.push_back( arg );
 }
 
-bool Message::is_valid() const {
-  switch (m_message_type) {
-    case MessageType::LOGIN:
-      return m_args.size() == 1 && is_identifier(m_args[0]);
-    case MessageType::CREATE:
-      return m_args.size() == 1 && is_identifier(m_args[0]);
-    case MessageType::PUSH:
-      return m_args.size() == 1 && is_value(m_args[0]);
-    case MessageType::SET:
-      return m_args.size() == 2 && is_identifier(m_args[0]) && is_identifier(m_args[1]);
-    case MessageType::GET:
-      return m_args.size() == 2 && is_identifier(m_args[0]) && is_identifier(m_args[1]);
-    case MessageType::BYE:
-      return m_args.empty();
-    case MessageType::DATA:
-      return m_args.size() == 1 && is_value(m_args[0]);
-    default:
-      return false;
+bool Message::is_valid() const
+{
+  // Basic validation based on message type and number of arguments
+  static const std::map<MessageType, std::pair<int, int>> arg_limits = {
+      {MessageType::LOGIN, {1, 1}},
+      {MessageType::CREATE, {1, 1}},
+      {MessageType::PUSH, {1, 1}},
+      {MessageType::POP, {0, 0}},
+      {MessageType::TOP, {0, 0}},
+      {MessageType::SET, {3, 3}},
+      {MessageType::GET, {2, 2}},
+      {MessageType::ADD, {0, 0}},
+      {MessageType::SUB, {0, 0}},
+      {MessageType::MUL, {0, 0}},
+      {MessageType::DIV, {0, 0}},
+      {MessageType::BEGIN, {0, 0}},
+      {MessageType::COMMIT, {0, 0}},
+      {MessageType::BYE, {0, 0}},
+      {MessageType::OK, {0, 0}},
+      {MessageType::FAILED, {1, 1}},
+      {MessageType::ERROR, {1, 1}},
+      {MessageType::DATA, {1, 1}},
+  };
+
+  if (m_message_type == MessageType::NONE) {
+    return false;
   }
+
+  auto it = arg_limits.find(m_message_type);
+  if (it == arg_limits.end()) {
+    return false;
+  }
+
+  int min_args = it->second.first;
+  int max_args = it->second.second;
+  int num_args = m_args.size();
+
+  return num_args >= min_args && num_args <= max_args;
 }
 
 
-// Validates if a string is an identifier
-bool is_identifier(const std::string &str) {
-    // An identifier starts with a letter and is followed by letters, digits, or underscores
-    static const std::regex identifier_regex("^[a-zA-Z][a-zA-Z0-9_]*$");
-    return std::regex_match(str, identifier_regex);
-}
-
-// Validates if a string is a value
-bool is_value(const std::string &str) {
-    // A value must be non-empty and contain no whitespace
-    return !str.empty() && str.find_first_of(" \t\n") == std::string::npos;
 }
