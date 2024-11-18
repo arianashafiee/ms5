@@ -3,6 +3,8 @@
 #include <regex>
 #include <cassert>
 #include "message.h"
+#include "message_utils.h"
+
 
 Message::Message()
   : m_message_type(MessageType::NONE)

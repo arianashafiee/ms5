@@ -192,6 +192,43 @@ TestObjs::TestObjs()
   // Table objects
   , invoices( new Table( "invoices" ) )
   , line_items( new Table( "line_items" ) )
+
+  // TestObjs struct to simulate test environment
+struct TestObjs {
+    Message login_req;
+    Message create_req;
+    Message push_req;
+    Message pop_req;
+    Message set_req;
+    Message get_req;
+    Message add_req;
+    Message mul_req;
+    Message sub_req;
+    Message div_req;
+    Message bye_req;
+    Message ok_resp;
+    Message failed_resp;
+    Message error_resp;
+    Message data_resp;
+    Message long_get_req;
+    Message create_req_2;
+    Message invalid_login_req;
+    Message invalid_create_req;
+    Message invalid_data_resp;
+
+    std::string encoded_login_req;
+    std::string encoded_create_req;
+    std::string encoded_data_resp;
+    std::string encoded_get_req;
+    std::string encoded_failed_resp;
+    std::string encoded_error_resp;
+    std::string encoded_bye_req;
+
+    Message invalid_too_long;
+    std::string encoded_push_req_no_nl;
+    std::string encoded_get_req_too_long;
+};
+
 {
   // This GET request message is just barely small enough to encode
   // (with no room to spare)
@@ -291,41 +328,6 @@ void assert_with_message(bool condition, const std::string &message,
     }
 }
 
-// TestObjs struct to simulate test environment
-struct TestObjs {
-    Message login_req;
-    Message create_req;
-    Message push_req;
-    Message pop_req;
-    Message set_req;
-    Message get_req;
-    Message add_req;
-    Message mul_req;
-    Message sub_req;
-    Message div_req;
-    Message bye_req;
-    Message ok_resp;
-    Message failed_resp;
-    Message error_resp;
-    Message data_resp;
-    Message long_get_req;
-    Message create_req_2;
-    Message invalid_login_req;
-    Message invalid_create_req;
-    Message invalid_data_resp;
-
-    std::string encoded_login_req;
-    std::string encoded_create_req;
-    std::string encoded_data_resp;
-    std::string encoded_get_req;
-    std::string encoded_failed_resp;
-    std::string encoded_error_resp;
-    std::string encoded_bye_req;
-
-    Message invalid_too_long;
-    std::string encoded_push_req_no_nl;
-    std::string encoded_get_req_too_long;
-};
 
 // Test functions
 void test_message_is_valid(TestObjs *objs) {
