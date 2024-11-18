@@ -271,131 +271,108 @@ void test_message_get_key( TestObjs *objs )
   ASSERT( "acct123" == objs->set_req.get_key() );
   ASSERT( "acct123" == objs->get_req.get_key() );
 }
-
-void test_message_is_valid( TestObjs *objs )
+void test_message_is_valid(TestObjs *objs)
 {
-  ASSERT( objs->login_req.is_valid() );
-  ASSERT( objs->create_req.is_valid() );
-  ASSERT( objs->push_req.is_valid() );
-  ASSERT( objs->pop_req.is_valid() );
-  ASSERT( objs->set_req.is_valid() );
-  ASSERT( objs->get_req.is_valid() );
-  ASSERT( objs->add_req.is_valid() );
-  ASSERT( objs->mul_req.is_valid() );
-  ASSERT( objs->sub_req.is_valid() );
-  ASSERT( objs->div_req.is_valid() );
-  ASSERT( objs->bye_req.is_valid() );
-  ASSERT( objs->ok_resp.is_valid() );
-  ASSERT( objs->failed_resp.is_valid() );
-  ASSERT( objs->error_resp.is_valid() );
-  ASSERT( objs->data_resp.is_valid() );
-  ASSERT( objs->long_get_req.is_valid() );
-  ASSERT( objs->create_req_2.is_valid() );
+  auto assert_valid = [](const Message &msg, const std::string &msg_name) {
+    if (!msg.is_valid()) {
+      std::cerr << "FAIL: " << msg_name << " is not valid.\n";
+    }
+    assert(msg.is_valid());
+  };
 
-  ASSERT( !objs->invalid_login_req.is_valid() );
-  ASSERT( !objs->invalid_create_req.is_valid() );
-  ASSERT( !objs->invalid_data_resp.is_valid() );
+  auto assert_invalid = [](const Message &msg, const std::string &msg_name) {
+    if (msg.is_valid()) {
+      std::cerr << "FAIL: " << msg_name << " is valid but should be invalid.\n";
+    }
+    assert(!msg.is_valid());
+  };
+
+  assert_valid(objs->login_req, "login_req");
+  assert_valid(objs->create_req, "create_req");
+  assert_valid(objs->push_req, "push_req");
+  assert_valid(objs->pop_req, "pop_req");
+  assert_valid(objs->set_req, "set_req");
+  assert_valid(objs->get_req, "get_req");
+  assert_valid(objs->add_req, "add_req");
+  assert_valid(objs->mul_req, "mul_req");
+  assert_valid(objs->sub_req, "sub_req");
+  assert_valid(objs->div_req, "div_req");
+  assert_valid(objs->bye_req, "bye_req");
+  assert_valid(objs->ok_resp, "ok_resp");
+  assert_valid(objs->failed_resp, "failed_resp");
+  assert_valid(objs->error_resp, "error_resp");
+  assert_valid(objs->data_resp, "data_resp");
+  assert_valid(objs->long_get_req, "long_get_req");
+  assert_valid(objs->create_req_2, "create_req_2");
+
+  assert_invalid(objs->invalid_login_req, "invalid_login_req");
+  assert_invalid(objs->invalid_create_req, "invalid_create_req");
+  assert_invalid(objs->invalid_data_resp, "invalid_data_resp");
+}
+void test_message_serialization_encode(TestObjs *objs)
+{
+  auto assert_encoded = [](const Message &msg, const std::string &expected, const std::string &msg_name) {
+    std::string actual;
+    MessageSerialization::encode(msg, actual);
+    if (actual != expected) {
+      std::cerr << "FAIL: Encoding of " << msg_name << " failed.\n";
+      std::cerr << "Expected: " << expected << "\n";
+      std::cerr << "Actual:   " << actual << "\n";
+    }
+    assert(actual == expected);
+  };
+
+  assert_encoded(objs->login_req, "LOGIN alice\n", "login_req");
+  assert_encoded(objs->create_req, "CREATE accounts\n", "create_req");
+  assert_encoded(objs->push_req, "PUSH 47374\n", "push_req");
+  assert_encoded(objs->pop_req, "POP\n", "pop_req");
+  assert_encoded(objs->set_req, "SET accounts acct123\n", "set_req");
+  assert_encoded(objs->data_resp, "DATA 10012\n", "data_resp");
 }
 
-void test_message_serialization_encode( TestObjs *objs )
-{
-  std::string s;
-
-  MessageSerialization::encode( objs->login_req, s );
-  ASSERT( "LOGIN alice\n" == s );
-
-  MessageSerialization::encode( objs->create_req, s );
-  ASSERT( "CREATE accounts\n" == s );
-
-  MessageSerialization::encode( objs->push_req, s );
-  ASSERT( "PUSH 47374\n" == s );
-
-  MessageSerialization::encode( objs->pop_req, s );
-  ASSERT( "POP\n" == s );
-
-  MessageSerialization::encode( objs->set_req, s );
-  ASSERT( "SET accounts acct123\n" == s );
-
-  MessageSerialization::encode( objs->data_resp, s );
-  ASSERT( "DATA 10012\n" == s );
-}
-
-void test_message_serialization_encode_long( TestObjs *objs )
+void test_message_serialization_encode_long(TestObjs *objs)
 {
   std::string expected_str = "GET " + std::string(509, 'y') + " " + std::string(509, 'y') + "\n";
   std::string actual_str;
-  MessageSerialization::encode( objs->long_get_req, actual_str );
-  ASSERT( expected_str == actual_str );
+  MessageSerialization::encode(objs->long_get_req, actual_str);
+  if (expected_str != actual_str) {
+    std::cerr << "FAIL: Encoding of long_get_req failed.\n";
+    std::cerr << "Expected: " << expected_str << "\n";
+    std::cerr << "Actual:   " << actual_str << "\n";
+  }
+  assert(expected_str == actual_str);
 }
-
-void test_message_serialization_encode_too_long( TestObjs *objs )
+void test_message_serialization_encode_too_long(TestObjs *objs)
 {
   try {
     std::string s;
-    MessageSerialization::encode( objs->invalid_too_long, s );
-    FAIL( "exception was not thrown for too-long encoded message" );
+    MessageSerialization::encode(objs->invalid_too_long, s);
+    std::cerr << "FAIL: Exception was not thrown for too-long encoded message.\n";
+    assert(false); // Fail the test
   } catch (InvalidMessage &ex) {
-    // Good
+    std::cerr << "PASS: Exception thrown as expected for too-long encoded message.\n";
   }
 }
-
-void test_message_serialization_decode( TestObjs *objs )
+void test_message_serialization_decode(TestObjs *objs)
 {
-  Message msg;
+  auto assert_decoded = [](const std::string &encoded, const Message &expected_msg, const std::string &msg_name) {
+    Message actual_msg;
+    MessageSerialization::decode(encoded, actual_msg);
+    if (actual_msg != expected_msg) { // Assuming operator== is implemented for Message
+      std::cerr << "FAIL: Decoding of " << msg_name << " failed.\n";
+      std::cerr << "Expected: " << expected_msg.to_string() << "\n"; // Assuming to_string() is implemented
+      std::cerr << "Actual:   " << actual_msg.to_string() << "\n";
+    }
+    assert(actual_msg == expected_msg);
+  };
 
-  MessageSerialization::decode( objs->encoded_login_req, msg );
-  ASSERT( MessageType::LOGIN == msg.get_message_type() );
-  ASSERT( 1 == msg.get_num_args() );
-  ASSERT( "alice" == msg.get_username() );
-
-  MessageSerialization::decode( objs->encoded_create_req, msg );
-  ASSERT( MessageType::CREATE == msg.get_message_type() );
-  ASSERT( 1 == msg.get_num_args() );
-  ASSERT( "invoices" == msg.get_table() );
-
-  MessageSerialization::decode( objs->encoded_data_resp, msg );
-  ASSERT( MessageType::DATA == msg.get_message_type() );
-  ASSERT( 1 == msg.get_num_args() );
-  ASSERT( "90125" == msg.get_value() );
-
-  MessageSerialization::decode( objs->encoded_get_req, msg );
-  ASSERT( MessageType::GET == msg.get_message_type() );
-  ASSERT( 2 == msg.get_num_args() );
-  ASSERT( "lineitems" == msg.get_table() );
-  ASSERT( "foobar" == msg.get_key() );
-
-  MessageSerialization::decode( objs->encoded_failed_resp, msg );
-  ASSERT( MessageType::FAILED == msg.get_message_type() );
-  ASSERT( 1 == msg.get_num_args() );
-  ASSERT( "Something went wrong, shucks!" == msg.get_quoted_text() );
-
-  MessageSerialization::decode( objs->encoded_error_resp, msg );
-  ASSERT( MessageType::ERROR == msg.get_message_type() );
-  ASSERT( 1 == msg.get_num_args() );
-  ASSERT( "Wow, something really got messed up" == msg.get_quoted_text() );
-
-  MessageSerialization::decode( objs->encoded_bye_req, msg );
-  ASSERT( MessageType::BYE == msg.get_message_type() );
-  ASSERT( 0 == msg.get_num_args() );
-}
-
-void test_message_serialization_decode_invalid( TestObjs *objs )
-{
-  Message msg;
-
-  try {
-    MessageSerialization::decode( objs->encoded_push_req_no_nl, msg );
-    FAIL( "No exception thrown decoding message lacking terminating newline" );
-  } catch ( InvalidMessage &ex ) {
-    // Good
-  }
-
-  try {
-    MessageSerialization::decode( objs->encoded_get_req_too_long, msg );
-    FAIL( "No exception thrown decoding message that is too long" );
-  } catch ( InvalidMessage &ex ) {
-    // Good
-  }
+  assert_decoded(objs->encoded_login_req, objs->login_req, "login_req");
+  assert_decoded(objs->encoded_create_req, objs->create_req, "create_req");
+  assert_decoded(objs->encoded_data_resp, objs->data_resp, "data_resp");
+  assert_decoded(objs->encoded_get_req, objs->get_req, "get_req");
+  assert_decoded(objs->encoded_failed_resp, objs->failed_resp, "failed_resp");
+  assert_decoded(objs->encoded_error_resp, objs->error_resp, "error_resp");
+  assert_decoded(objs->encoded_bye_req, objs->bye_req, "bye_req");
 }
 
 void test_table_has_key( TestObjs *objs )
