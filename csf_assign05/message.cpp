@@ -97,14 +97,14 @@ void Message::push_arg( const std::string &arg )
 
 bool Message::is_valid() const
 {
-  // Basic validation based on message type and number of arguments
+  // Define the minimum and maximum number of arguments for each message type
   static const std::map<MessageType, std::pair<int, int>> arg_limits = {
       {MessageType::LOGIN, {1, 1}},
       {MessageType::CREATE, {1, 1}},
       {MessageType::PUSH, {1, 1}},
       {MessageType::POP, {0, 0}},
       {MessageType::TOP, {0, 0}},
-      {MessageType::SET, {3, 3}},
+      {MessageType::SET, {2, 3}},  // SET requires table, key, and (optional) value
       {MessageType::GET, {2, 2}},
       {MessageType::ADD, {0, 0}},
       {MessageType::SUB, {0, 0}},
@@ -119,21 +119,53 @@ bool Message::is_valid() const
       {MessageType::DATA, {1, 1}},
   };
 
+  // Check for NONE type (invalid message)
   if (m_message_type == MessageType::NONE) {
     return false;
   }
 
+  // Retrieve the expected argument count range for this message type
   auto it = arg_limits.find(m_message_type);
   if (it == arg_limits.end()) {
+    return false; // Unknown message type
+  }
+
+  int num_args = m_args.size();
+  int min_args = it->second.first;
+  int max_args = it->second.second;
+
+  // Validate the number of arguments
+  if (num_args < min_args || num_args > max_args) {
     return false;
   }
 
-  int min_args = it->second.first;
-  int max_args = it->second.second;
-  int num_args = m_args.size();
+  // Additional validation for specific message types
+  switch (m_message_type) {
+    case MessageType::LOGIN:
+    case MessageType::CREATE:
+    case MessageType::SET:
+    case MessageType::GET:
+      // Ensure table and key are valid identifiers (if present)
+      for (const std::string &arg : m_args) {
+        if (!std::regex_match(arg, std::regex("^[a-zA-Z][a-zA-Z0-9_]*$"))) {
+          return false;
+        }
+      }
+      break;
 
-  return num_args >= min_args && num_args <= max_args;
+    case MessageType::FAILED:
+    case MessageType::ERROR:
+    case MessageType::DATA:
+      // Ensure the argument (if present) does not contain invalid characters
+      if (!m_args.empty() && m_args[0].find('\n') != std::string::npos) {
+        return false;
+      }
+      break;
+
+    default:
+      // No additional checks for other message types
+      break;
+  }
+
+  return true;
 }
-
-
-
