@@ -97,27 +97,31 @@ void Message::push_arg( const std::string &arg )
 bool Message::is_valid() const {
   switch (m_message_type) {
     case MessageType::LOGIN:
-      return m_args.size() == 1;
+      return m_args.size() == 1 && is_identifier(m_args[0]);
     case MessageType::CREATE:
+      return m_args.size() == 1 && is_identifier(m_args[0]);
     case MessageType::PUSH:
-    case MessageType::DATA:
-    case MessageType::FAILED:
-    case MessageType::ERROR:
-      return m_args.size() == 1;
+      return m_args.size() == 1 && is_value(m_args[0]);
     case MessageType::SET:
+      return m_args.size() == 2 && is_identifier(m_args[0]) && is_identifier(m_args[1]);
     case MessageType::GET:
-      return m_args.size() == 2;
-    case MessageType::ADD:
-    case MessageType::MUL:
-    case MessageType::SUB:
-    case MessageType::DIV:
-    case MessageType::POP:
-    case MessageType::TOP:
-    case MessageType::BEGIN:
-    case MessageType::COMMIT:
+      return m_args.size() == 2 && is_identifier(m_args[0]) && is_identifier(m_args[1]);
     case MessageType::BYE:
       return m_args.empty();
+    case MessageType::DATA:
+      return m_args.size() == 1 && is_value(m_args[0]);
     default:
       return false;
   }
+}
+
+bool is_identifier(const std::string &str) {
+  if (str.empty() || !std::isalpha(str[0])) return false;
+  return std::all_of(str.begin(), str.end(), [](char c) {
+    return std::isalnum(c) || c == '_';
+  });
+}
+
+bool is_value(const std::string &str) {
+  return !str.empty() && str.find(' ') == std::string::npos;
 }

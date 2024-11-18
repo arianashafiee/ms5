@@ -9,7 +9,7 @@
 void MessageSerialization::encode(const Message &msg, std::string &encoded_msg) {
   std::ostringstream oss;
 
-  // Convert MessageType to int explicitly before streaming
+  // Convert MessageType to int explicitly before appending
   oss << static_cast<int>(msg.get_message_type());
 
   // Append arguments
@@ -34,6 +34,7 @@ void MessageSerialization::encode(const Message &msg, std::string &encoded_msg) 
   }
 }
 
+
 void MessageSerialization::decode(const std::string &encoded_msg_, Message &msg) {
   if (encoded_msg_.empty() || encoded_msg_.back() != '\n') {
     throw InvalidMessage("Encoded message must end with a newline");
@@ -53,7 +54,7 @@ void MessageSerialization::decode(const std::string &encoded_msg_, Message &msg)
   int message_type;
   try {
     message_type = std::stoi(token);
-  } catch (...) {
+  } catch (const std::invalid_argument &) {
     throw InvalidMessage("Invalid message type");
   }
 
@@ -81,7 +82,7 @@ void MessageSerialization::decode(const std::string &encoded_msg_, Message &msg)
       quoted_arg.pop_back(); // Remove trailing quote
       args.push_back(quoted_arg);
     } else {
-      args.push_back(token);
+      args.push_back(token); // Add directly if not quoted
     }
   }
 
