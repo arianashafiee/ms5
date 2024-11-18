@@ -71,13 +71,14 @@ std::string Message::get_key() const
   return "";
 }
 
-std::string Message::get_value() const
-{
-  if (m_message_type == MessageType::SET && m_args.size() > 2) {
-    return m_args[2];
+std::string Message::get_value() const {
+  if (m_message_type == MessageType::PUSH || m_message_type == MessageType::DATA) {
+    assert(m_args.size() >= 1);
+    return m_args[0];
   }
   return "";
 }
+
 
 std::string Message::get_quoted_text() const
 {
@@ -93,36 +94,35 @@ void Message::push_arg( const std::string &arg )
   m_args.push_back( arg );
 }
 
-bool Message::is_valid() const
-{
-  // Validate based on the message type and its arguments
+bool Message::is_valid() const {
+  if (m_message_type == MessageType::NONE) return false;
+
   switch (m_message_type) {
     case MessageType::LOGIN:
-      return m_args.size() == 1; // LOGIN requires one argument (username)
+      return m_args.size() == 1;
     case MessageType::CREATE:
-      return m_args.size() == 1; // CREATE requires one argument (table name)
-    case MessageType::GET:
-      return m_args.size() == 2; // GET requires table and key
-    case MessageType::SET:
-      return m_args.size() == 3; // SET requires table, key, and value
+      return m_args.size() == 1;
     case MessageType::PUSH:
-    case MessageType::DATA:
-      return m_args.size() == 1; // PUSH/DATA require one argument (value)
-    case MessageType::FAILED:
-    case MessageType::ERROR:
-      return m_args.size() == 1; // FAILED/ERROR require one quoted_text
-    case MessageType::OK:
-    case MessageType::POP:
-    case MessageType::TOP:
+      return m_args.size() == 1;
+    case MessageType::SET:
+    case MessageType::GET:
+      return m_args.size() == 2;
     case MessageType::ADD:
     case MessageType::SUB:
     case MessageType::MUL:
     case MessageType::DIV:
+    case MessageType::POP:
+    case MessageType::TOP:
     case MessageType::BEGIN:
     case MessageType::COMMIT:
     case MessageType::BYE:
-      return m_args.empty(); // These message types don't take any arguments
+      return m_args.empty();
+    case MessageType::OK:
+    case MessageType::FAILED:
+    case MessageType::ERROR:
+    case MessageType::DATA:
+      return !m_args.empty();
     default:
-      return false; // Invalid message type
+      return false;
   }
 }
