@@ -5,6 +5,7 @@
 #include "message.h"
 #include "message_serialization.h"
 #include "exceptions.h"
+#include "server.h" // Include the full definition of Server
 
 ClientConnection::ClientConnection(Server *server, int client_fd)
     : m_server(server), m_client_fd(client_fd) {
@@ -36,7 +37,9 @@ void ClientConnection::chat_with_client() {
     } catch (const InvalidMessage &e) {
         send_response(MessageType::ERROR, e.what());
     } catch (const CommException &e) {
-        m_server->log_error(e.what());
+        if (m_server) {
+            m_server->log_error(e.what()); // Log error using the full Server definition
+        }
     } catch (const std::exception &e) {
         send_response(MessageType::ERROR, e.what());
     }
@@ -57,6 +60,7 @@ void ClientConnection::process_request(const Message &request) {
 
 void ClientConnection::send_response(MessageType type, const std::string &content) {
     Message response(type, {content});
-    std::string encoded = MessageSerialization::encode(response);
+    std::string encoded;
+    MessageSerialization::encode(response, encoded); // Use encode with two arguments
     rio_writen(m_client_fd, encoded.c_str(), encoded.size());
 }
