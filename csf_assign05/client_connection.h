@@ -2,11 +2,11 @@
 #define CLIENT_CONNECTION_H
 
 #include <set>
+#include <string>
 #include "message.h"
 #include "csapp.h"
 
 class Server; // forward declaration
-class Table; // forward declaration
 
 class ClientConnection {
 private:
@@ -15,16 +15,18 @@ private:
   rio_t m_fdbuf;
 
   // copy constructor and assignment operator are prohibited
-  ClientConnection( const ClientConnection & );
-  ClientConnection &operator=( const ClientConnection & );
+  ClientConnection(const ClientConnection &);
+  ClientConnection &operator=(const ClientConnection &);
+
+  // Helper methods
+  void process_request(const Message &request);
+  void send_response(Message::MessageType type, const std::string &content);
 
 public:
-  ClientConnection( Server *server, int client_fd );
+  ClientConnection(Server *server, int client_fd);
   ~ClientConnection();
 
   void chat_with_client();
-
-  // TODO: additional member functions
 };
 
 #endif // CLIENT_CONNECTION_H
