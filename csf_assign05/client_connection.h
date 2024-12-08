@@ -14,7 +14,7 @@ private:
   int m_client_fd;
   rio_t m_fdbuf;
 
-  // Copy constructor and assignment operator are prohibited
+  // copy constructor and assignment operator are prohibited
   ClientConnection(const ClientConnection &);
   ClientConnection &operator=(const ClientConnection &);
 
