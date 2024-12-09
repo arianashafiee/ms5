@@ -1,38 +1,60 @@
-#ifndef SERVER_H
-#define SERVER_H
+#ifndef MESSAGE_H
+#define MESSAGE_H
 
-#include <map>
 #include <string>
-#include <pthread.h>
-#include "table.h"
-#include "client_connection.h"
+#include <vector>
+#include <initializer_list>
 
-class Server {
-private:
-  int m_listenfd;                      // listening socket file descriptor
-  pthread_mutex_t m_tables_mutex;      // mutex for accessing m_tables
-  std::map<std::string, Table*> m_tables;
-
-  // copy constructor and assignment operator are prohibited
-  Server(const Server &);
-  Server &operator=(const Server &);
-
-public:
-  Server();
-  ~Server();
-
-  void listen(const std::string &port);
-  void server_loop();
-
-  static void *client_worker(void *arg);
-
-  void log_error(const std::string &what);
-
-  void create_table(const std::string &name);
-  Table *find_table(const std::string &name);
-
-  void lock_tables_map() { pthread_mutex_lock(&m_tables_mutex); }
-  void unlock_tables_map() { pthread_mutex_unlock(&m_tables_mutex); }
+enum class MessageType {
+  NONE,
+  LOGIN,
+  CREATE,
+  PUSH,
+  POP,
+  TOP,
+  SET,
+  GET,
+  ADD,
+  SUB,
+  MUL,
+  DIV,
+  BEGIN,
+  COMMIT,
+  BYE,
+  OK,
+  FAILED,
+  ERROR,
+  DATA
 };
 
-#endif // SERVER_H
+class Message {
+private:
+  MessageType m_message_type;
+  std::vector<std::string> m_args;
+
+public:
+  static const unsigned MAX_ENCODED_LEN = 1024;
+
+  Message();
+  Message(MessageType message_type, std::initializer_list<std::string> args = {});
+  Message(const Message &other);
+  ~Message();
+  Message &operator=(const Message &rhs);
+
+  MessageType get_message_type() const;
+  void set_message_type(MessageType message_type);
+
+  std::string get_username() const;
+  std::string get_table() const;
+  std::string get_key() const;
+  std::string get_value() const;
+  std::string get_quoted_text() const;
+
+  void push_arg(const std::string &arg);
+  bool is_valid() const;
+
+  unsigned get_num_args() const { return m_args.size(); }
+  std::string get_arg(unsigned i) const { return m_args.at(i); }
+};
+
+#endif // MESSAGE_H

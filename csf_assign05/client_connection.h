@@ -1,30 +1,24 @@
 #ifndef CLIENT_CONNECTION_H
 #define CLIENT_CONNECTION_H
 
-#include <set>
-#include <string>
-#include "message.h"
+#include "message.h"  // must come before we use Message or MessageType
 #include "csapp.h"
 #include "value_stack.h"
+#include <set>
+#include <string>
 
 class Server; // forward declaration
-class Table; // forward declaration
+class Table;  // forward declaration
 
 class ClientConnection {
 private:
   Server *m_server;
   int m_client_fd;
   rio_t m_fdbuf;
+  ValueStack m_stack;
+  bool m_inTransaction;
+  std::set<Table*> m_lockedTables;
 
-  ValueStack m_stack;            // operand stack
-  bool m_inTransaction;          // track if we are in a transaction
-  std::set<Table*> m_lockedTables; // tables locked during transaction
-
-  // copy constructor and assignment operator are prohibited
-  ClientConnection(const ClientConnection &);
-  ClientConnection &operator=(const ClientConnection &);
-
-  // Helper functions:
   bool is_valid_identifier(const std::string &s) const;
   bool is_integer(const std::string &s) const;
 
@@ -40,7 +34,6 @@ private:
   void commit_transaction();
   void rollback_transaction();
 
-  // Handlers for each request:
   void handle_LOGIN(const Message &msg);
   void handle_CREATE(const Message &msg);
   void handle_PUSH(const Message &msg);
@@ -55,6 +48,10 @@ private:
   void handle_BEGIN(const Message &msg);
   void handle_COMMIT(const Message &msg);
   void handle_BYE(const Message &msg);
+
+  // Prohibit copy and assignment
+  ClientConnection(const ClientConnection &);
+  ClientConnection &operator=(const ClientConnection &);
 
 public:
   ClientConnection(Server *server, int client_fd);
