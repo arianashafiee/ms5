@@ -51,6 +51,7 @@ public:
   std::string get_quoted_text() const;
 
   void push_arg(const std::string &arg);
+
   bool is_valid() const;
 
   unsigned get_num_args() const { return m_args.size(); }

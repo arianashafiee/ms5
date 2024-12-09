@@ -1,21 +1,15 @@
-#include <iostream>
-#include <cassert>
-#include <memory>
-#include <stdexcept>
-#include <regex>
-#include "csapp.h"
-#include "exceptions.h"
-#include "message.h"
-#include "message_serialization.h"
-#include "server.h"
 #include "client_connection.h"
+#include "server.h"
+#include "exceptions.h"
 #include "table.h"
-#include "value_stack.h"
+#include "message_serialization.h"
+#include <stdexcept>
+#include <memory>
+#include <iostream>
+#include <regex>
 
 ClientConnection::ClientConnection(Server *server, int client_fd)
-  : m_server(server)
-  , m_client_fd(client_fd)
-  , m_inTransaction(false)
+  : m_server(server), m_client_fd(client_fd), m_inTransaction(false)
 {
   rio_readinitb(&m_fdbuf, m_client_fd);
 }
@@ -23,6 +17,83 @@ ClientConnection::ClientConnection(Server *server, int client_fd)
 ClientConnection::~ClientConnection()
 {
   Close(m_client_fd);
+}
+
+// Since is_valid() handles identifier checks, this may not be needed for message validity.
+// It's kept here in case needed for arithmetic checks, etc.
+bool ClientConnection::is_valid_identifier(const std::string &s) const {
+  std::regex r("^[A-Za-z][A-Za-z0-9_]*$");
+  return std::regex_match(s, r);
+}
+
+bool ClientConnection::is_integer(const std::string &s) const {
+  if (s.empty()) return false;
+  size_t start = 0;
+  if (s[0] == '-') start = 1;
+  for (size_t i=start; i<s.size(); i++) {
+    if (!isdigit((unsigned char)s[i])) return false;
+  }
+  return true;
+}
+
+void ClientConnection::send_ok() {
+  send_response(MessageType::OK);
+}
+
+void ClientConnection::send_failed(const std::string &reason) {
+  send_response(MessageType::FAILED, reason);
+}
+
+void ClientConnection::send_error(const std::string &reason) {
+  send_response(MessageType::ERROR, reason);
+}
+
+void ClientConnection::send_data(const std::string &value) {
+  Message msg(MessageType::DATA, {value});
+  std::string encoded;
+  MessageSerialization::encode(msg, encoded);
+  Rio_writen(m_client_fd, encoded.c_str(), encoded.size());
+}
+
+void ClientConnection::send_response(MessageType type, const std::string &arg) {
+  Message msg(type);
+  if (!arg.empty()) {
+    msg.push_arg(arg);
+  }
+  std::string encoded;
+  MessageSerialization::encode(msg, encoded);
+  Rio_writen(m_client_fd, encoded.c_str(), encoded.size());
+}
+
+void ClientConnection::lock_table_autocommit(Table *tbl) {
+  tbl->lock();
+}
+
+void ClientConnection::lock_table_transaction(Table *tbl) {
+  if (m_lockedTables.count(tbl)) return; // already locked
+
+  if (!tbl->trylock()) {
+    throw FailedTransaction("Failed to acquire table lock for transaction");
+  }
+  m_lockedTables.insert(tbl);
+}
+
+void ClientConnection::commit_transaction() {
+  for (auto tbl : m_lockedTables) {
+    tbl->commit_changes();
+    tbl->unlock();
+  }
+  m_lockedTables.clear();
+  m_inTransaction = false;
+}
+
+void ClientConnection::rollback_transaction() {
+  for (auto tbl : m_lockedTables) {
+    tbl->rollback_changes();
+    tbl->unlock();
+  }
+  m_lockedTables.clear();
+  m_inTransaction = false;
 }
 
 void ClientConnection::chat_with_client()
@@ -35,7 +106,7 @@ void ClientConnection::chat_with_client()
       char buffer[Message::MAX_ENCODED_LEN];
       ssize_t rc = rio_readlineb(&m_fdbuf, buffer, Message::MAX_ENCODED_LEN);
       if (rc == 0) {
-        // Client closed connection or no more data
+        // Client closed connection
         done = true;
         break;
       }
@@ -44,19 +115,20 @@ void ClientConnection::chat_with_client()
       Message request;
       try {
         MessageSerialization::decode(line, request);
-        // Check that this is a request (not a response)
-        MessageType t = request.get_message_type();
-        if (t == MessageType::OK || t == MessageType::FAILED ||
-            t == MessageType::ERROR || t == MessageType::DATA) {
-          throw InvalidMessage("Client sent a response message");
+
+        // Check message validity here
+        // If invalid, decode() would have thrown InvalidMessage already
+        // or we can check again:
+        if (!request.is_valid()) {
+          throw InvalidMessage("Invalid message");
         }
 
-        // The first message must be LOGIN
+        MessageType t = request.get_message_type();
         if (!logged_in && t != MessageType::LOGIN) {
+          // First message must be LOGIN
           throw InvalidMessage("First message must be LOGIN");
         }
 
-        // Handle request
         switch(t) {
           case MessageType::LOGIN:
             handle_LOGIN(request);
@@ -103,21 +175,23 @@ void ClientConnection::chat_with_client()
             done = true;
             break;
           default:
-            throw InvalidMessage("Unknown or invalid request message");
+            // If we got here, message type is not recognized
+            throw InvalidMessage("Unknown request type");
         }
 
       } catch (InvalidMessage &imex) {
-        // Send ERROR and end conversation
+        // Invalid message → ERROR and end connection
         send_error(imex.what());
         done = true;
       } catch (OperationException &opex) {
-        // Recoverable error: send FAILED
+        // Operation failed, but not invalid message
+        // FAILED response, rollback if transaction
         if (m_inTransaction) {
           rollback_transaction();
         }
         send_failed(opex.what());
       } catch (FailedTransaction &ftex) {
-        // Recoverable: send FAILED and rollback transaction
+        // Transaction-specific failure
         rollback_transaction();
         send_failed(ftex.what());
       }
@@ -126,110 +200,23 @@ void ClientConnection::chat_with_client()
     // Communication error, end silently
   }
 
-  // If conversation ends while in a transaction, rollback changes
   if (m_inTransaction) {
     rollback_transaction();
   }
 }
 
-bool ClientConnection::is_valid_identifier(const std::string &s) const {
-  std::regex r("^[A-Za-z][A-Za-z0-9_]*$");
-  return std::regex_match(s, r);
-}
-
-bool ClientConnection::is_integer(const std::string &s) const {
-  if (s.empty()) return false;
-  size_t start = 0;
-  if (s[0] == '-') start = 1;
-  for (size_t i=start; i<s.size(); i++) {
-    if (!isdigit((unsigned char)s[i])) return false;
-  }
-  return true;
-}
-
-void ClientConnection::send_ok() {
-  send_response(MessageType::OK);
-}
-
-void ClientConnection::send_failed(const std::string &reason) {
-  send_response(MessageType::FAILED, reason);
-}
-
-void ClientConnection::send_error(const std::string &reason) {
-  send_response(MessageType::ERROR, reason);
-}
-
-void ClientConnection::send_data(const std::string &value) {
-  Message msg(MessageType::DATA, {value});
-  std::string encoded;
-  MessageSerialization::encode(msg, encoded);
-  Rio_writen(m_client_fd, encoded.c_str(), encoded.size());
-}
-
-void ClientConnection::send_response(MessageType type, const std::string &arg) {
-  Message msg(type);
-  if (!arg.empty()) {
-    msg.push_arg(arg);
-  }
-  std::string encoded;
-  MessageSerialization::encode(msg, encoded);
-  Rio_writen(m_client_fd, encoded.c_str(), encoded.size());
-}
-
-void ClientConnection::lock_table_autocommit(Table *tbl) {
-  // Acquire lock blocking
-  tbl->lock();
-}
-
-void ClientConnection::lock_table_transaction(Table *tbl) {
-  // If already locked this table, no need to lock again
-  if (m_lockedTables.count(tbl)) return;
-
-  if (!tbl->trylock()) {
-    throw FailedTransaction("Failed to acquire table lock for transaction");
-  }
-  m_lockedTables.insert(tbl);
-}
-
-void ClientConnection::commit_transaction() {
-  // Commit changes in all locked tables
-  for (auto tbl : m_lockedTables) {
-    tbl->commit_changes();
-    tbl->unlock();
-  }
-  m_lockedTables.clear();
-  m_inTransaction = false;
-}
-
-void ClientConnection::rollback_transaction() {
-  // Roll back changes in all locked tables
-  for (auto tbl : m_lockedTables) {
-    tbl->rollback_changes();
-    tbl->unlock();
-  }
-  m_lockedTables.clear();
-  m_inTransaction = false;
-}
-
 void ClientConnection::handle_LOGIN(const Message &msg) {
-  // LOGIN username
-  std::string username = msg.get_username();
-  if (!is_valid_identifier(username)) {
-    throw InvalidMessage("Invalid username");
-  }
+  // Already validated by is_valid()
   send_ok();
 }
 
 void ClientConnection::handle_CREATE(const Message &msg) {
-  // CREATE table
+  // Table name validity was checked by is_valid(), so we just create it
   std::string tableName = msg.get_table();
-  if (!is_valid_identifier(tableName)) {
-    throw OperationException("Invalid table name");
-  }
-
   m_server->lock_tables_map();
   try {
-    if (m_server->find_table(tableName) != nullptr) {
+    Table *t = m_server->find_table(tableName);
+    if (t != nullptr) {
       m_server->unlock_tables_map();
       throw OperationException("Table already exists");
     }
@@ -239,40 +226,39 @@ void ClientConnection::handle_CREATE(const Message &msg) {
     m_server->unlock_tables_map();
     throw;
   }
-
   send_ok();
 }
 
 void ClientConnection::handle_PUSH(const Message &msg) {
-  // PUSH value
+  // Pushing value onto stack
   std::string val = msg.get_value();
-  if (val.empty()) {
-    throw OperationException("Cannot PUSH empty value");
-  }
+  // is_valid() ensures we had 1 argument and not empty
   m_stack.push(val);
   send_ok();
 }
 
 void ClientConnection::handle_POP(const Message &msg) {
-  (void)msg; 
+  // POP top of stack
+  (void)msg;
+  if (m_stack.is_empty()) {
+    throw OperationException("Stack empty, cannot pop");
+  }
   m_stack.pop();
   send_ok();
 }
 
 void ClientConnection::handle_TOP(const Message &msg) {
   (void)msg;
+  if (m_stack.is_empty()) {
+    throw OperationException("Stack empty, cannot top");
+  }
   std::string top_val = m_stack.get_top();
   send_data(top_val);
 }
 
 void ClientConnection::handle_SET(const Message &msg) {
-  // SET table key
   std::string tableName = msg.get_table();
   std::string key = msg.get_key();
-  if (!is_valid_identifier(tableName) || !is_valid_identifier(key)) {
-    throw OperationException("Invalid table or key name");
-  }
-
   if (m_stack.is_empty()) {
     throw OperationException("No value on stack to SET");
   }
@@ -288,14 +274,11 @@ void ClientConnection::handle_SET(const Message &msg) {
 
   if (m_inTransaction) {
     lock_table_transaction(tbl);
+    tbl->set(key, value);
+    // don't commit yet, wait for COMMIT
   } else {
     lock_table_autocommit(tbl);
-  }
-
-  tbl->set(key, value);
-
-  if (!m_inTransaction) {
-    // Autocommit
+    tbl->set(key, value);
     tbl->commit_changes();
     tbl->unlock();
   }
@@ -304,35 +287,28 @@ void ClientConnection::handle_SET(const Message &msg) {
 }
 
 void ClientConnection::handle_GET(const Message &msg) {
-  // GET table key
   std::string tableName = msg.get_table();
   std::string key = msg.get_key();
-  if (!is_valid_identifier(tableName) || !is_valid_identifier(key)) {
-    throw OperationException("Invalid table or key name");
-  }
 
   m_server->lock_tables_map();
   Table *tbl = m_server->find_table(tableName);
   m_server->unlock_tables_map();
+
   if (!tbl) {
     throw OperationException("No such table");
   }
 
+  std::string val;
   if (m_inTransaction) {
     lock_table_transaction(tbl);
+    val = tbl->get(key);
   } else {
     lock_table_autocommit(tbl);
-  }
-
-  std::string val = tbl->get(key);
-
-  m_stack.push(val);
-
-  if (!m_inTransaction) {
-    // autocommit
+    val = tbl->get(key);
     tbl->unlock();
   }
 
+  m_stack.push(val);
   send_ok();
 }
 
@@ -354,8 +330,7 @@ void ClientConnection::handle_ADD(const Message &msg) {
 
   int i1 = std::stoi(v1);
   int i2 = std::stoi(v2);
-  int sum = i1 + i2;
-  m_stack.push(std::to_string(sum));
+  m_stack.push(std::to_string(i1 + i2));
   send_ok();
 }
 
@@ -377,8 +352,7 @@ void ClientConnection::handle_SUB(const Message &msg) {
 
   int leftInt = std::stoi(leftVal);
   int rightInt = std::stoi(rightVal);
-  int diff = leftInt - rightInt;
-  m_stack.push(std::to_string(diff));
+  m_stack.push(std::to_string(leftInt - rightInt));
   send_ok();
 }
 
@@ -400,8 +374,7 @@ void ClientConnection::handle_MUL(const Message &msg) {
 
   long i1 = std::stol(v1);
   long i2 = std::stol(v2);
-  long prod = i1 * i2;
-  m_stack.push(std::to_string(prod));
+  m_stack.push(std::to_string(i1 * i2));
   send_ok();
 }
 
@@ -426,8 +399,7 @@ void ClientConnection::handle_DIV(const Message &msg) {
   if (rightInt == 0) {
     throw OperationException("Division by zero");
   }
-  int quotient = leftInt / rightInt;
-  m_stack.push(std::to_string(quotient));
+  m_stack.push(std::to_string(leftInt / rightInt));
   send_ok();
 }
 
@@ -444,7 +416,6 @@ void ClientConnection::handle_BEGIN(const Message &msg) {
 void ClientConnection::handle_COMMIT(const Message &msg) {
   (void)msg;
   if (!m_inTransaction) {
-    // COMMIT without BEGIN
     throw OperationException("No transaction in progress");
   }
   commit_transaction();

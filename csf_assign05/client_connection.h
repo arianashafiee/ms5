@@ -1,7 +1,7 @@
 #ifndef CLIENT_CONNECTION_H
 #define CLIENT_CONNECTION_H
 
-#include "message.h"  // must come before we use Message or MessageType
+#include "message.h"   // include message.h first to get Message and MessageType
 #include "csapp.h"
 #include "value_stack.h"
 #include <set>
@@ -19,7 +19,7 @@ private:
   bool m_inTransaction;
   std::set<Table*> m_lockedTables;
 
-  bool is_valid_identifier(const std::string &s) const;
+  bool is_valid_identifier(const std::string &s) const; // may not be needed now, since is_valid() checks identifiers
   bool is_integer(const std::string &s) const;
 
   void send_ok();
@@ -49,7 +49,7 @@ private:
   void handle_COMMIT(const Message &msg);
   void handle_BYE(const Message &msg);
 
-  // Prohibit copy and assignment
+  // copy constructor and assignment operator are prohibited
   ClientConnection(const ClientConnection &);
   ClientConnection &operator=(const ClientConnection &);
 
