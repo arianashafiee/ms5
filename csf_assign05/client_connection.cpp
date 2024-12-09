@@ -12,12 +12,12 @@
 #include "table.h"
 #include "value_stack.h"
 
-ClientConnection::ClientConnection( Server *server, int client_fd )
+ClientConnection::ClientConnection(Server *server, int client_fd)
   : m_server(server)
   , m_client_fd(client_fd)
   , m_inTransaction(false)
 {
-  rio_readinitb( &m_fdbuf, m_client_fd );
+  rio_readinitb(&m_fdbuf, m_client_fd);
 }
 
 ClientConnection::~ClientConnection()
@@ -35,22 +35,20 @@ void ClientConnection::chat_with_client()
       char buffer[Message::MAX_ENCODED_LEN];
       ssize_t rc = rio_readlineb(&m_fdbuf, buffer, Message::MAX_ENCODED_LEN);
       if (rc == 0) {
-        // Client closed connection
+        // Client closed connection or no more data
         done = true;
         break;
       }
       std::string line(buffer);
 
       Message request;
-      Message response;
       try {
         MessageSerialization::decode(line, request);
         // Check that this is a request (not a response)
-        // Requests are all commands except OK, FAILED, ERROR, DATA
         MessageType t = request.get_message_type();
         if (t == MessageType::OK || t == MessageType::FAILED ||
             t == MessageType::ERROR || t == MessageType::DATA) {
-          throw InvalidMessage("Client sent a response message rather than a request");
+          throw InvalidMessage("Client sent a response message");
         }
 
         // The first message must be LOGIN
@@ -58,7 +56,7 @@ void ClientConnection::chat_with_client()
           throw InvalidMessage("First message must be LOGIN");
         }
 
-        // Dispatch handling of request
+        // Handle request
         switch(t) {
           case MessageType::LOGIN:
             handle_LOGIN(request);
@@ -115,7 +113,6 @@ void ClientConnection::chat_with_client()
       } catch (OperationException &opex) {
         // Recoverable error: send FAILED
         if (m_inTransaction) {
-          // rollback the transaction
           rollback_transaction();
         }
         send_failed(opex.what());
@@ -126,7 +123,7 @@ void ClientConnection::chat_with_client()
       }
     }
   } catch (CommException &cex) {
-    // Communication error, just end silently
+    // Communication error, end silently
   }
 
   // If conversation ends while in a transaction, rollback changes
@@ -142,7 +139,6 @@ bool ClientConnection::is_valid_identifier(const std::string &s) const {
 
 bool ClientConnection::is_integer(const std::string &s) const {
   if (s.empty()) return false;
-  // Optional leading '-' for negative numbers
   size_t start = 0;
   if (s[0] == '-') start = 1;
   for (size_t i=start; i<s.size(); i++) {
@@ -151,7 +147,6 @@ bool ClientConnection::is_integer(const std::string &s) const {
   return true;
 }
 
-// ====== Response sending methods ======
 void ClientConnection::send_ok() {
   send_response(MessageType::OK);
 }
@@ -181,25 +176,20 @@ void ClientConnection::send_response(MessageType type, const std::string &arg) {
   Rio_writen(m_client_fd, encoded.c_str(), encoded.size());
 }
 
-// ====== Locking methods ======
-
 void ClientConnection::lock_table_autocommit(Table *tbl) {
   // Acquire lock blocking
   tbl->lock();
 }
 
 void ClientConnection::lock_table_transaction(Table *tbl) {
-  // If we already locked this table, no need to lock again
+  // If already locked this table, no need to lock again
   if (m_lockedTables.count(tbl)) return;
 
   if (!tbl->trylock()) {
-    // Failed to acquire lock immediately
     throw FailedTransaction("Failed to acquire table lock for transaction");
   }
   m_lockedTables.insert(tbl);
 }
-
-// ====== Transaction methods ======
 
 void ClientConnection::commit_transaction() {
   // Commit changes in all locked tables
@@ -221,31 +211,28 @@ void ClientConnection::rollback_transaction() {
   m_inTransaction = false;
 }
 
-// ====== Request handlers ======
-
 void ClientConnection::handle_LOGIN(const Message &msg) {
   // LOGIN username
-  // Check username validity
   std::string username = msg.get_username();
   if (!is_valid_identifier(username)) {
     throw InvalidMessage("Invalid username");
   }
-
-  // If we got here, login is fine
   send_ok();
 }
 
 void ClientConnection::handle_CREATE(const Message &msg) {
   // CREATE table
   std::string tableName = msg.get_table();
-  // Validate identifier
   if (!is_valid_identifier(tableName)) {
     throw OperationException("Invalid table name");
   }
 
-  // Acquire global lock on tables map
   m_server->lock_tables_map();
   try {
+    if (m_server->find_table(tableName) != nullptr) {
+      m_server->unlock_tables_map();
+      throw OperationException("Table already exists");
+    }
     m_server->create_table(tableName);
     m_server->unlock_tables_map();
   } catch(...) {
@@ -267,14 +254,14 @@ void ClientConnection::handle_PUSH(const Message &msg) {
 }
 
 void ClientConnection::handle_POP(const Message &msg) {
-  (void)msg; // unused
-  m_stack.pop(); // can throw OperationException if empty
+  (void)msg; 
+  m_stack.pop();
   send_ok();
 }
 
 void ClientConnection::handle_TOP(const Message &msg) {
-  (void)msg; // unused
-  std::string top_val = m_stack.get_top(); // can throw OperationException if empty
+  (void)msg;
+  std::string top_val = m_stack.get_top();
   send_data(top_val);
 }
 
@@ -282,20 +269,16 @@ void ClientConnection::handle_SET(const Message &msg) {
   // SET table key
   std::string tableName = msg.get_table();
   std::string key = msg.get_key();
-
-  // Validate identifiers
   if (!is_valid_identifier(tableName) || !is_valid_identifier(key)) {
     throw OperationException("Invalid table or key name");
   }
 
-  // Must pop a value from the stack to set
   if (m_stack.is_empty()) {
     throw OperationException("No value on stack to SET");
   }
   std::string value = m_stack.get_top();
   m_stack.pop();
 
-  // Lock table
   m_server->lock_tables_map();
   Table *tbl = m_server->find_table(tableName);
   m_server->unlock_tables_map();
@@ -309,11 +292,10 @@ void ClientConnection::handle_SET(const Message &msg) {
     lock_table_autocommit(tbl);
   }
 
-  // Set value (tentatively)
   tbl->set(key, value);
 
   if (!m_inTransaction) {
-    // Autocommit means commit now and unlock
+    // Autocommit
     tbl->commit_changes();
     tbl->unlock();
   }
@@ -325,8 +307,6 @@ void ClientConnection::handle_GET(const Message &msg) {
   // GET table key
   std::string tableName = msg.get_table();
   std::string key = msg.get_key();
-
-  // Validate identifiers
   if (!is_valid_identifier(tableName) || !is_valid_identifier(key)) {
     throw OperationException("Invalid table or key name");
   }
@@ -346,11 +326,10 @@ void ClientConnection::handle_GET(const Message &msg) {
 
   std::string val = tbl->get(key);
 
-  // Push value onto stack
   m_stack.push(val);
 
   if (!m_inTransaction) {
-    // autocommit => no changes to commit here, just unlock
+    // autocommit
     tbl->unlock();
   }
 
@@ -358,8 +337,7 @@ void ClientConnection::handle_GET(const Message &msg) {
 }
 
 void ClientConnection::handle_ADD(const Message &msg) {
-  (void)msg; // unused
-  // Pop two operands, add them, push result
+  (void)msg;
   if (m_stack.is_empty()) throw OperationException("Not enough operands for ADD");
   std::string v1 = m_stack.get_top();
   m_stack.pop();
@@ -371,8 +349,6 @@ void ClientConnection::handle_ADD(const Message &msg) {
   m_stack.pop();
 
   if (!is_integer(v1) || !is_integer(v2)) {
-    // restore stack?
-    // Actually no need, we already popped them.
     throw OperationException("Non-integer operand for ADD");
   }
 
@@ -385,7 +361,6 @@ void ClientConnection::handle_ADD(const Message &msg) {
 
 void ClientConnection::handle_SUB(const Message &msg) {
   (void)msg;
-  // Pop right, pop left, subtract right from left
   if (m_stack.is_empty()) throw OperationException("Not enough operands for SUB");
   std::string rightVal = m_stack.get_top();
   m_stack.pop();
@@ -409,7 +384,6 @@ void ClientConnection::handle_SUB(const Message &msg) {
 
 void ClientConnection::handle_MUL(const Message &msg) {
   (void)msg;
-  // Pop two, multiply
   if (m_stack.is_empty()) throw OperationException("Not enough operands for MUL");
   std::string v1 = m_stack.get_top();
   m_stack.pop();
@@ -424,16 +398,15 @@ void ClientConnection::handle_MUL(const Message &msg) {
     throw OperationException("Non-integer operand for MUL");
   }
 
-  int i1 = std::stoi(v1);
-  int i2 = std::stoi(v2);
-  long prod = (long)i1 * (long)i2; // just to be safe
+  long i1 = std::stol(v1);
+  long i2 = std::stol(v2);
+  long prod = i1 * i2;
   m_stack.push(std::to_string(prod));
   send_ok();
 }
 
 void ClientConnection::handle_DIV(const Message &msg) {
   (void)msg;
-  // Pop right, pop left, divide left by right
   if (m_stack.is_empty()) throw OperationException("Not enough operands for DIV");
   std::string rightVal = m_stack.get_top();
   m_stack.pop();
@@ -461,7 +434,7 @@ void ClientConnection::handle_DIV(const Message &msg) {
 void ClientConnection::handle_BEGIN(const Message &msg) {
   (void)msg;
   if (m_inTransaction) {
-    // Nested transaction not allowed
+    // Nested transactions not allowed
     throw FailedTransaction("Nested transactions not allowed");
   }
   m_inTransaction = true;
@@ -471,7 +444,7 @@ void ClientConnection::handle_BEGIN(const Message &msg) {
 void ClientConnection::handle_COMMIT(const Message &msg) {
   (void)msg;
   if (!m_inTransaction) {
-    // COMMIT without BEGIN?
+    // COMMIT without BEGIN
     throw OperationException("No transaction in progress");
   }
   commit_transaction();
@@ -480,7 +453,5 @@ void ClientConnection::handle_COMMIT(const Message &msg) {
 
 void ClientConnection::handle_BYE(const Message &msg) {
   (void)msg;
-  // BYE ends the conversation
   send_ok();
 }
-
