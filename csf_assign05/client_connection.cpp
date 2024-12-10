@@ -335,7 +335,6 @@ void ClientConnection::handle_COMMIT(const Message &msg) {
 void ClientConnection::handle_BYE(const Message &msg, bool &done) {
   (void)msg;
   send_ok();
-  done = true;
 }
 
 // Locking helpers, transaction commit/rollback, etc. would remain the same.
