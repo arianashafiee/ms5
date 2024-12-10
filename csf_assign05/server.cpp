@@ -1,12 +1,12 @@
 #include <iostream>
 #include <cassert>
 #include <stdexcept>
+#include <memory>
 #include "csapp.h"
 #include "exceptions.h"
 #include "guard.h"
 #include "server.h"
 #include "client_connection.h"
-#include <memory>
 
 Server::Server()
   : m_listenfd(-1)
@@ -49,20 +49,23 @@ void Server::server_loop()
     socklen_t clientlen = sizeof(clientaddr);
     int client_fd = accept(m_listenfd, (SA *)&clientaddr, &clientlen);
     if (client_fd < 0) {
-      // Just log and continue
+      // Log and continue on accept failure
       log_error("Accept failed");
       continue;
     }
 
     ClientConnection *client = new ClientConnection(this, client_fd);
     pthread_t thr_id;
+
+    // Create a client thread
     if (pthread_create(&thr_id, nullptr, client_worker, client) != 0) {
       log_error("Could not create client thread");
       Close(client_fd);
       delete client;
       continue;
     }
-    // Detach the thread so that it will clean up after itself
+
+    // Detach thread after successful creation
     pthread_detach(thr_id);
   }
 }
@@ -73,8 +76,12 @@ void *Server::client_worker(void *arg)
   try {
     client->chat_with_client();
   } catch (std::exception &ex) {
-    // If unexpected exception, just end the connection
+    // Log unexpected exceptions
+    Server::log_error(std::string("Unexpected exception: ") + ex.what());
   }
+
+  // Explicitly close the client socket after processing
+  Close(client->get_client_fd());
   return nullptr;
 }
 
@@ -85,7 +92,7 @@ void Server::log_error(const std::string &what)
 
 void Server::create_table(const std::string &name)
 {
-  // caller must hold lock
+  // Caller must hold the lock
   if (m_tables.find(name) != m_tables.end()) {
     throw OperationException("Table already exists");
   }
