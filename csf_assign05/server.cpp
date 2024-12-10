@@ -6,6 +6,7 @@
 #include "guard.h"
 #include "server.h"
 #include "client_connection.h"
+#include "memory"
 
 Server::Server()
   : m_listenfd(-1)
