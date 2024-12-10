@@ -205,12 +205,12 @@ void ClientConnection::chat_with_client()
   }
 }
 
-void ClientConnection::handle_LOGIN(const Message &msg) {
+void ClientConnection::handle_LOGIN(const Message &msg, bool &logged_in) {
   // Already validated by is_valid()
   send_ok();
 }
 
-void ClientConnection::handle_CREATE(const Message &msg) {
+void ClientConnection::handle_CREATE(const Message &msg,  bool &done) {
   // Table name validity was checked by is_valid(), so we just create it
   std::string tableName = msg.get_table();
   m_server->lock_tables_map();
