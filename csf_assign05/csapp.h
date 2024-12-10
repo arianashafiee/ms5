@@ -1,3 +1,4 @@
+
 /*
  * csapp.h - prototypes and definitions for the CS:APP3e book
  */
@@ -66,22 +67,8 @@ typedef struct {
 /* $end rio_t */
 
 /* External variables */
-
-extern char **environ; /* Defined by libc */
-// Declare h_errno only in C language (not C++ mode)
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-#ifndef h_errno
 extern int h_errno;    /* Defined by BIND for DNS errors */
-#endif
-
-#ifdef __cplusplus
-}
-#endif
-
-    /* Defined by BIND for DNS errors */
+extern char **environ; /* Defined by libc */
 
 /* Misc constants */
 #define	MAXLINE	 8192  /* Max text line length */
