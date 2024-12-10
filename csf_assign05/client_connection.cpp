@@ -31,99 +31,99 @@ ClientConnection::~ClientConnection()
   Close(m_client_fd);
 }
 
-void ClientConnection::chat_with_client()
-{
-  bool done = false;
-  bool logged_in = false;
+void ClientConnection::chat_with_client() {
+    bool done = false;
+    bool logged_in = false;
 
-  try {
-    while (!done) {
-      char buffer[Message::MAX_ENCODED_LEN];
-      ssize_t rc = rio_readlineb(&m_fdbuf, buffer, Message::MAX_ENCODED_LEN);
-      if (rc == 0) {
-        // Client closed connection
-        done = true;
-        break;
-      }
-      std::string line(buffer);
+    try {
+        while (!done) {
+            char buffer[Message::MAX_ENCODED_LEN];
+            ssize_t rc = rio_readlineb(&m_fdbuf, buffer, Message::MAX_ENCODED_LEN);
+            if (rc == 0) {
+                // Client closed connection
+                done = true;
+                break;
+            }
+            std::string line(buffer);
 
-      Message request;
-      try {
-        MessageSerialization::decode(line, request);
+            Message request;
+            try {
+                MessageSerialization::decode(line, request);
 
-        // First request must be LOGIN
-        if (!logged_in && request.get_message_type() != MessageType::LOGIN) {
-          throw InvalidMessage("First message must be LOGIN");
+                // First request must be LOGIN
+                if (!logged_in && request.get_message_type() != MessageType::LOGIN) {
+                    throw InvalidMessage("First message must be LOGIN");
+                }
+
+                switch (request.get_message_type()) {
+                    case MessageType::LOGIN:
+                        handle_LOGIN(request, logged_in);
+                        break;
+                    case MessageType::CREATE:
+                        handle_CREATE(request);
+                        break;
+                    case MessageType::PUSH:
+                        handle_PUSH(request);
+                        break;
+                    case MessageType::POP:
+                        handle_POP(request);
+                        break;
+                    case MessageType::TOP:
+                        handle_TOP(request);
+                        break;
+                    case MessageType::SET:
+                        handle_SET(request);
+                        break;
+                    case MessageType::GET:
+                        handle_GET(request);
+                        break;
+                    case MessageType::ADD:
+                        handle_ADD(request);
+                        break;
+                    case MessageType::SUB:
+                        handle_SUB(request);
+                        break;
+                    case MessageType::MUL:
+                        handle_MUL(request);
+                        break;
+                    case MessageType::DIV:
+                        handle_DIV(request);
+                        break;
+                    case MessageType::BEGIN:
+                        handle_BEGIN(request);
+                        break;
+                    case MessageType::COMMIT:
+                        handle_COMMIT(request);
+                        break;
+                    case MessageType::BYE:
+                        handle_BYE(request, done); // Process BYE
+                        break;
+                    default:
+                        throw InvalidMessage("Unknown request message");
+                }
+
+            } catch (InvalidMessage &imex) {
+                send_error(imex.what());
+                done = true;
+            } catch (OperationException &opex) {
+                if (m_inTransaction) {
+                    rollback_transaction();
+                }
+                send_failed(opex.what());
+            } catch (FailedTransaction &ftex) {
+                rollback_transaction();
+                send_failed(ftex.what());
+            }
         }
-
-        switch(request.get_message_type()) {
-          case MessageType::LOGIN:
-            handle_LOGIN(request, logged_in);
-            break;
-          case MessageType::CREATE:
-            handle_CREATE(request);
-            break;
-          case MessageType::PUSH:
-            handle_PUSH(request);
-            break;
-          case MessageType::POP:
-            handle_POP(request);
-            break;
-          case MessageType::TOP:
-            handle_TOP(request);
-            break;
-          case MessageType::SET:
-            handle_SET(request);
-            break;
-          case MessageType::GET:
-            handle_GET(request);
-            break;
-          case MessageType::ADD:
-            handle_ADD(request);
-            break;
-          case MessageType::SUB:
-            handle_SUB(request);
-            break;
-          case MessageType::MUL:
-            handle_MUL(request);
-            break;
-          case MessageType::DIV:
-            handle_DIV(request);
-            break;
-          case MessageType::BEGIN:
-            handle_BEGIN(request);
-            break;
-          case MessageType::COMMIT:
-            handle_COMMIT(request);
-            break;
-          case MessageType::BYE:
-            handle_BYE(request, done);
-            break;
-          default:
-            throw InvalidMessage("Unknown request message");
-        }
-
-      } catch (InvalidMessage &imex) {
-        send_error(imex.what());
-        done = true;
-      } catch (OperationException &opex) {
-        if (m_inTransaction) {
-          rollback_transaction();
-        }
-        send_failed(opex.what());
-      } catch (FailedTransaction &ftex) {
-        rollback_transaction();
-        send_failed(ftex.what());
-      }
+    } catch (CommException &cex) {
+        // Communication error: just end silently
     }
-  } catch (CommException &cex) {
-    // Communication error: just end silently
-  }
 
-  if (m_inTransaction) {
-    rollback_transaction();
-  }
+    if (m_inTransaction) {
+        rollback_transaction();
+    }
 }
+
 
 // Implement all handle_* functions with correct signatures
 void ClientConnection::handle_LOGIN(const Message &msg, bool &logged_in) {
@@ -335,6 +335,7 @@ void ClientConnection::handle_COMMIT(const Message &msg) {
 void ClientConnection::handle_BYE(const Message &msg, bool &done) {
   (void)msg;
   send_ok();
+  done = true;
 }
 
 // Locking helpers, transaction commit/rollback, etc. would remain the same.
