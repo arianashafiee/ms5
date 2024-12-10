@@ -77,7 +77,7 @@ void *Server::client_worker(void *arg)
     client->chat_with_client();
   } catch (std::exception &ex) {
     // Log unexpected exceptions
-    Server::log_error(std::string("Unexpected exception: ") + ex.what());
+    log_error(std::string("Unexpected exception: ") + ex.what());
   }
 
   // Explicitly close the client socket after processing
