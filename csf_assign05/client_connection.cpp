@@ -7,9 +7,6 @@
 #include <memory>
 #include <iostream>
 
-// Removed is_valid_identifier since it's not needed.
-
-// A helper for arithmetic checks
 bool ClientConnection::is_integer(const std::string &s) const {
   if (s.empty()) return false;
   size_t start = 0;
@@ -28,6 +25,7 @@ ClientConnection::ClientConnection(Server *server, int client_fd)
 
 ClientConnection::~ClientConnection()
 {
+  // Close the client file descriptor to end connection
   Close(m_client_fd);
 }
 
@@ -45,13 +43,13 @@ void ClientConnection::chat_with_client()
         done = true;
         break;
       }
-      std::string line(buffer);
 
+      std::string line(buffer);
       Message request;
       try {
         MessageSerialization::decode(line, request);
 
-        // First request must be LOGIN
+        // The first request must be LOGIN
         if (!logged_in && request.get_message_type() != MessageType::LOGIN) {
           throw InvalidMessage("First message must be LOGIN");
         }
@@ -71,6 +69,7 @@ void ClientConnection::chat_with_client()
             break;
           case MessageType::TOP:
             handle_TOP(request);
+            // DATA response sent, do not set done here. Continue loop.
             break;
           case MessageType::SET:
             handle_SET(request);
@@ -97,27 +96,31 @@ void ClientConnection::chat_with_client()
             handle_COMMIT(request);
             break;
           case MessageType::BYE:
-            handle_BYE(request, done);
+            handle_BYE(request, done); 
+            // done is set to true inside handle_BYE
             break;
           default:
             throw InvalidMessage("Unknown request message");
         }
 
       } catch (InvalidMessage &imex) {
+        // Invalid message → send ERROR and end session
         send_error(imex.what());
         done = true;
       } catch (OperationException &opex) {
+        // Recoverable error → send FAILED but do not end session
         if (m_inTransaction) {
           rollback_transaction();
         }
         send_failed(opex.what());
       } catch (FailedTransaction &ftex) {
+        // Transaction failed → send FAILED but continue session
         rollback_transaction();
         send_failed(ftex.what());
       }
     }
   } catch (CommException &cex) {
-    // Communication error: just end silently
+    // Communication error → end silently
   }
 
   if (m_inTransaction) {
@@ -125,9 +128,10 @@ void ClientConnection::chat_with_client()
   }
 }
 
-// Implement all handle_* functions with correct signatures
+// Handlers Implementation
+
 void ClientConnection::handle_LOGIN(const Message &msg, bool &logged_in) {
-  // LOGIN is valid, just send OK and set logged_in = true
+  // Just send OK and mark as logged in
   send_ok();
   logged_in = true;
 }
@@ -157,14 +161,15 @@ void ClientConnection::handle_PUSH(const Message &msg) {
 
 void ClientConnection::handle_POP(const Message &msg) {
   (void)msg;
-  m_stack.pop(); // throws OperationException if empty
+  m_stack.pop(); // Throws OperationException if empty
   send_ok();
 }
 
 void ClientConnection::handle_TOP(const Message &msg) {
   (void)msg;
   std::string top_val = m_stack.get_top();
-  send_data(top_val); // DATA response
+  send_data(top_val); // Send DATA response
+  // Do not set done. Continue reading next requests.
 }
 
 void ClientConnection::handle_SET(const Message &msg) {
@@ -186,7 +191,6 @@ void ClientConnection::handle_SET(const Message &msg) {
   if (m_inTransaction) {
     lock_table_transaction(tbl);
     tbl->set(key, value);
-    // changes tentative until COMMIT
   } else {
     lock_table_autocommit(tbl);
     tbl->set(key, value);
@@ -335,10 +339,8 @@ void ClientConnection::handle_COMMIT(const Message &msg) {
 void ClientConnection::handle_BYE(const Message &msg, bool &done) {
   (void)msg;
   send_ok();
-  done = true;
+  done = true; // End session after BYE
 }
-
-// Locking helpers, transaction commit/rollback, etc. would remain the same.
 
 void ClientConnection::lock_table_autocommit(Table *tbl) {
   tbl->lock();
