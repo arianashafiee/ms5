@@ -133,17 +133,15 @@ void ClientConnection::send_error(const std::string &reason)
   send_response(MessageType::ERROR, reason);
 }
 
-void ClientConnection::send_response(MessageType type, const std::string &arg)
-{
-  Message msg(type);
-  if (!arg.empty()) {
-    msg.push_arg(arg);
-  }
-  std::string encoded;
-  MessageSerialization::encode(msg, encoded);
+void ClientConnection::send_response(MessageType type, const std::string &arg) {
+    Message msg(type);
+    if (!arg.empty()) {
+        msg.push_arg(arg);
+    }
+    std::string encoded;
+    MessageSerialization::encode(msg, encoded);
 
-  // Ensure the response is fully written
-  if (Rio_writen(m_client_fd, encoded.c_str(), encoded.size()) != (ssize_t)encoded.size()) {
-    throw CommException("Failed to send response");
-  }
+    // Call Rio_writen without a return check if it's void
+    Rio_writen(m_client_fd, encoded.c_str(), encoded.size());
 }
+
