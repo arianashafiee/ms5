@@ -131,7 +131,7 @@ void ClientConnection::chat_with_client()
 
         switch(t) {
           case MessageType::LOGIN:
-            handle_LOGIN(request);
+            handle_LOGIN(request, logged_in);
             logged_in = true;
             break;
           case MessageType::CREATE:
@@ -171,7 +171,7 @@ void ClientConnection::chat_with_client()
             handle_COMMIT(request);
             break;
           case MessageType::BYE:
-            handle_BYE(request);
+            handle_BYE(request, done);
             done = true;
             break;
           default:

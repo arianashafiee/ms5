@@ -5,6 +5,8 @@
 #include "message.h"
 #include "csapp.h"
 #include "value_stack.h"
+#include <string>
+
 
 class Server; // forward declaration
 class Table; // forward declaration
