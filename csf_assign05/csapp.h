@@ -68,9 +68,19 @@ typedef struct {
 /* External variables */
 
 extern char **environ; /* Defined by libc */
+// Declare h_errno only in C language (not C++ mode)
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifndef h_errno
 extern int h_errno;    /* Defined by BIND for DNS errors */
 #endif
+
+#ifdef __cplusplus
+}
+#endif
+
     /* Defined by BIND for DNS errors */
 
 /* Misc constants */
