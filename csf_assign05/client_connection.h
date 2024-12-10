@@ -5,11 +5,9 @@
 #include "message.h"
 #include "csapp.h"
 #include "value_stack.h"
-#include <string>
-
 
 class Server; // forward declaration
-class Table; // forward declaration
+class Table;  // forward declaration
 
 class ClientConnection {
 private:
@@ -35,7 +33,6 @@ private:
   void commit_transaction();
   void rollback_transaction();
 
-  // Handlers
   void handle_LOGIN(const Message &msg, bool &logged_in);
   void handle_CREATE(const Message &msg);
   void handle_PUSH(const Message &msg);
@@ -49,9 +46,8 @@ private:
   void handle_DIV(const Message &msg);
   void handle_BEGIN(const Message &msg);
   void handle_COMMIT(const Message &msg);
-  void handle_BYE(const Message &msg);
+  void handle_BYE(const Message &msg, bool &done);
 
-  // copy constructor and assignment operator are prohibited
   ClientConnection(const ClientConnection &);
   ClientConnection &operator=(const ClientConnection &);
 
