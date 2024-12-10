@@ -30,7 +30,7 @@ public:
 
   static void *client_worker(void *arg);
 
-  void log_error(const std::string &what);
+  static void log_error(const std::string &what);
 
   // Create a table with the given name. Throws OperationException if exists.
   void create_table(const std::string &name);

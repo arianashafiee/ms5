@@ -52,6 +52,7 @@ private:
   ClientConnection &operator=(const ClientConnection &);
 
 public:
+  int get_client_fd() const { return m_client_fd; }
   ClientConnection(Server *server, int client_fd);
   ~ClientConnection();
 

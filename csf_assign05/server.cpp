@@ -49,7 +49,6 @@ void Server::server_loop()
     socklen_t clientlen = sizeof(clientaddr);
     int client_fd = accept(m_listenfd, (SA *)&clientaddr, &clientlen);
     if (client_fd < 0) {
-      // Log and continue on accept failure
       log_error("Accept failed");
       continue;
     }
@@ -76,8 +75,8 @@ void *Server::client_worker(void *arg)
   try {
     client->chat_with_client();
   } catch (std::exception &ex) {
-    // Log unexpected exceptions
-    log_error(std::string("Unexpected exception: ") + ex.what());
+    // Use static log_error
+    Server::log_error(std::string("Unexpected exception: ") + ex.what());
   }
 
   // Explicitly close the client socket after processing
