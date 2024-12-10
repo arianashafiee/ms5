@@ -49,7 +49,7 @@ private:
   void handle_DIV(const Message &msg);
   void handle_BEGIN(const Message &msg);
   void handle_COMMIT(const Message &msg);
-  void handle_BYE(const Message &msg, bool &done);
+  void handle_BYE(const Message &msg);
 
   // copy constructor and assignment operator are prohibited
   ClientConnection(const ClientConnection &);
